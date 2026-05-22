@@ -16,7 +16,6 @@ resources = {
 clients = {} 
 lock = threading.Lock()
 
-# Funcție utilitară pentru transformarea textului în obiect Datetime real
 def parse_dt(dt_str):
     return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M")
 
@@ -34,22 +33,19 @@ def is_overlap(s1, e1, s2, e2):
     try:
         dt_s1, dt_e1 = parse_dt(s1), parse_dt(e1)
         dt_s2, dt_e2 = parse_dt(s2), parse_dt(e2)
-        # Compararea cronologica a intervalelor
         return max(dt_s1, dt_s2) < min(dt_e1, dt_e2)
     except ValueError:
-        return True # Daca un text e corupt, returneaza True pentru a declansa eroarea de disponibilitate
+        return True 
 
 def check_availability(res_name, start, end, ignore_res_id=None):
     if res_name not in resources:
         return False
     res = resources[res_name]
     
-    # Verificăm blocurile temporare
     for b in res["blocks"]:
         if is_overlap(start, end, b["start"], b["end"]):
             return False
             
-    # Verificăm rezervările finale
     for r in res["reservations"]:
         if ignore_res_id and r["id"] == ignore_res_id:
             continue
@@ -90,7 +86,6 @@ def handle_client(conn, addr):
                     elif action == "BLOCK":
                         res_name, start, end = req["resource"], req["start"], req["end"]
                         
-                        # Validarea cronologica reala
                         is_valid, err_msg = validate_interval(start, end)
                         if not is_valid:
                             conn.sendall(json.dumps({"status": "error", "msg": err_msg}).encode() + b'\n')
