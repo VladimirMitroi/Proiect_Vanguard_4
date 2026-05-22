@@ -16,8 +16,28 @@ resources = {
 clients = {} 
 lock = threading.Lock()
 
+# Funcție utilitară pentru transformarea textului în obiect Datetime real
+def parse_dt(dt_str):
+    return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M")
+
+def validate_interval(start_str, end_str):
+    try:
+        dt_start = parse_dt(start_str)
+        dt_end = parse_dt(end_str)
+        if dt_start >= dt_end:
+            return False, "Eroare: Data de start trebuie sa fie inaintea datei de sfarsit."
+        return True, ""
+    except ValueError:
+        return False, "Eroare: Format data invalid! Foloseste exact YYYY-MM-DDTHH:MM (ex: 2026-05-25T09:00)"
+
 def is_overlap(s1, e1, s2, e2):
-    return max(s1, s2) < min(e1, e2)
+    try:
+        dt_s1, dt_e1 = parse_dt(s1), parse_dt(e1)
+        dt_s2, dt_e2 = parse_dt(s2), parse_dt(e2)
+        # Compararea cronologica a intervalelor
+        return max(dt_s1, dt_s2) < min(dt_e1, dt_e2)
+    except ValueError:
+        return True # Daca un text e corupt, returneaza True pentru a declansa eroarea de disponibilitate
 
 def check_availability(res_name, start, end, ignore_res_id=None):
     if res_name not in resources:
@@ -69,6 +89,13 @@ def handle_client(conn, addr):
                     
                     elif action == "BLOCK":
                         res_name, start, end = req["resource"], req["start"], req["end"]
+                        
+                        # Validarea cronologica reala
+                        is_valid, err_msg = validate_interval(start, end)
+                        if not is_valid:
+                            conn.sendall(json.dumps({"status": "error", "msg": err_msg}).encode() + b'\n')
+                            continue
+
                         if check_availability(res_name, start, end):
                             resources[res_name]["blocks"].append({"user": username, "start": start, "end": end})
                             conn.sendall(json.dumps({"status": "ok", "msg": "Resursa a fost blocata cu succes."}).encode() + b'\n')
@@ -86,6 +113,12 @@ def handle_client(conn, addr):
 
                     elif action == "RESERVE":
                         res_name, start, end = req["resource"], req["start"], req["end"]
+                        
+                        is_valid, err_msg = validate_interval(start, end)
+                        if not is_valid:
+                            conn.sendall(json.dumps({"status": "error", "msg": err_msg}).encode() + b'\n')
+                            continue
+
                         if res_name in resources:
                             res = resources[res_name]
                             res["blocks"] = [b for b in res["blocks"] if not (b["user"] == username and b["start"] == start and b["end"] == end)]
@@ -96,6 +129,12 @@ def handle_client(conn, addr):
 
                     elif action == "MODIFY":
                         res_name, res_id, n_start, n_end = req["resource"], req["id"], req["new_start"], req["new_end"]
+                        
+                        is_valid, err_msg = validate_interval(n_start, n_end)
+                        if not is_valid:
+                            conn.sendall(json.dumps({"status": "error", "msg": err_msg}).encode() + b'\n')
+                            continue
+
                         if check_availability(res_name, n_start, n_end, ignore_res_id=res_id):
                             for r in resources[res_name]["reservations"]:
                                 if r["id"] == res_id and r["user"] == username:
