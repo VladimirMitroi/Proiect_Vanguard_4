@@ -1,0 +1,8 @@
+services:
+  server:
+    build: ./server
+    ports:
+      - "9999:9999"
+    environment:
+      - PORT=9999
+      - HOST=0.0.0.0
